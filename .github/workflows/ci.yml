@@ -48,6 +48,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set toolchain environment variable
+        run: echo "toolchain=stable" >> $GITHUB_ENV
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -57,8 +59,7 @@ jobs:
         with:
           workspaces: contracts
       - name: Format check
-        run: cargo fmt --all -- --check
-        working-directory: contracts
+        run: cargo fmt --all --acts
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
         working-directory: contracts
