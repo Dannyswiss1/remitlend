@@ -464,6 +464,7 @@
             "ext": "v0"
           },
           518400
+          518400
         ]
       ],
       [
@@ -657,6 +658,7 @@
             "ext": "v0"
           },
           518400
+          518400
         ]
       ],
       [
@@ -846,6 +848,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "extension_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "interest_paid"
                       },
                       "val": {
@@ -919,6 +929,7 @@
             },
             "ext": "v0"
           },
+          518400
           518400
         ]
       ],
@@ -997,12 +1008,36 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "MaxExtensions"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 2
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "NftContract"
                             }
                           ]
                         },
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "Paused"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "bool": false
                         }
                       },
                       {
@@ -1036,6 +1071,7 @@
             },
             "ext": "v0"
           },
+          518400
           518400
         ]
       ],
@@ -1381,6 +1417,7 @@
             },
             "ext": "v0"
           },
+          518400
           518400
         ]
       ]
