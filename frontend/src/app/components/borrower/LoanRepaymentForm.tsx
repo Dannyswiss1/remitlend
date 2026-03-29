@@ -8,6 +8,10 @@ import { TransactionPreviewModal } from "../transaction/TransactionPreviewModal"
 import { useTransactionPreview } from "../../hooks/useTransactionPreview";
 import { formatLoanRepayment } from "../../utils/transactionFormatter";
 import { DollarSign, AlertCircle } from "lucide-react";
+import { useGamificationStore } from "../../stores/useGamificationStore";
+import { useRepaymentOperation } from "../../hooks/useRepaymentOperation";
+import { OperationProgress } from "../ui/OperationProgress";
+import { useWalletStore, selectWalletAddress } from "../../stores/useWalletStore";
 
 interface LoanRepaymentFormProps {
   loanId: number;
@@ -19,6 +23,23 @@ export function LoanRepaymentForm({ loanId, totalOwed, minPayment = 0 }: LoanRep
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const txPreview = useTransactionPreview();
+  const gamificationStore = useGamificationStore();
+  const address = useWalletStore(selectWalletAddress);
+
+  const repayment = useRepaymentOperation({
+    onSuccess: () => {
+      gamificationStore.addXP(50, "Loan repayment");
+      gamificationStore.unlockAchievement("first_repayment");
+      const isStreak = Math.random() > 0.5;
+      if (isStreak) {
+        setTimeout(() => {
+          gamificationStore.addXP(100, "On-time repayment streak");
+          gamificationStore.unlockAchievement("streak_master");
+        }, 1000);
+      }
+      setAmount("");
+    },
+  });
 
   const handleAmountChange = (value: string) => {
     setAmount(value);
@@ -56,31 +77,18 @@ export function LoanRepaymentForm({ loanId, totalOwed, minPayment = 0 }: LoanRep
 
     const numAmount = parseFloat(amount);
 
-    // Show transaction preview modal
     const previewData = formatLoanRepayment({
       loanId,
       amount: numAmount,
     });
 
     txPreview.show(previewData, async () => {
-      // This is where the actual transaction would be executed
-      // For now, we'll simulate it
-      await simulateRepayment(loanId, numAmount);
+      await repayment.executeRepayment({
+        loanId,
+        amount: numAmount,
+        borrowerAddress: address ?? "",
+      });
     });
-  };
-
-  const simulateRepayment = async (loanId: number, amount: number): Promise<void> => {
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // TODO: Replace with actual smart contract call
-    // Example: await loanContract.repay(loanId, amount);
-
-    // TODO: Success notification will be handled by useContractMutation wrapper
-    // when integrated with actual contract calls
-
-    // Reset form
-    setAmount("");
   };
 
   const handlePayFullAmount = () => {
@@ -142,14 +150,17 @@ export function LoanRepaymentForm({ loanId, totalOwed, minPayment = 0 }: LoanRep
             </div>
           </div>
 
+          {/* Transaction Progress */}
+          <OperationProgress transaction={repayment.transaction} type="repayment" />
+
           {/* Action Button */}
           <Button
             variant="primary"
             onClick={handleRepayClick}
-            disabled={!amount || !!error}
+            disabled={!amount || !!error || repayment.isLoading}
             className="w-full"
           >
-            Review Repayment
+            {repayment.isLoading ? "Processing..." : "Review Repayment"}
           </Button>
         </CardContent>
       </Card>

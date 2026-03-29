@@ -20,6 +20,7 @@
 import { type UseMutationResult } from "@tanstack/react-query";
 import { useContractToast } from "./useContractToast";
 import { useCallback, useRef } from "react";
+import { useGamificationStore } from "../stores/useGamificationStore";
 
 interface ContractMutationOptions {
   /** Message shown during pending state */
@@ -32,6 +33,12 @@ interface ContractMutationOptions {
   network?: "testnet" | "public";
   /** Disable automatic toast notifications */
   disableToast?: boolean;
+  /** Gamification XP to award on success */
+  gamificationXP?: number;
+  /** Gamification reason for XP */
+  gamificationReason?: string;
+  /** Gamification achievement ID to unlock on success */
+  gamificationAchievement?: string;
 }
 
 /**
@@ -43,6 +50,7 @@ export function useContractMutation<TData extends { txHash?: string }, TError, T
   options: ContractMutationOptions = {},
 ) {
   const toast = useContractToast();
+  const gamificationStore = useGamificationStore();
   const toastIdRef = useRef<string | number | null>(null);
 
   const {
@@ -51,48 +59,38 @@ export function useContractMutation<TData extends { txHash?: string }, TError, T
     errorMessage = "Transaction failed",
     network = "testnet",
     disableToast = false,
+    gamificationXP,
+    gamificationReason,
+    gamificationAchievement,
   } = options;
 
-  const mutate = useCallback(
-    (variables: TVariables, mutationOptions?: Parameters<typeof mutation.mutate>[1]) => {
-      if (!disableToast) {
-        toastIdRef.current = toast.showPending(pendingMessage);
-      }
+  const triggerGamification = useCallback(() => {
+    if (gamificationXP) {
+      // Small delay to let the toast appear first
+      setTimeout(() => {
+        gamificationStore.addXP(gamificationXP, gamificationReason);
+        if (gamificationAchievement) {
+          gamificationStore.unlockAchievement(gamificationAchievement);
+        }
+      }, 500);
+    } else if (gamificationAchievement) {
+      setTimeout(() => {
+        gamificationStore.unlockAchievement(gamificationAchievement);
+      }, 500);
+    }
+  }, [gamificationXP, gamificationReason, gamificationAchievement, gamificationStore]);
 
-      mutation.mutate(variables, {
-        ...mutationOptions,
-        onSuccess: (data, vars, onMutateResult, context) => {
-          if (!disableToast && toastIdRef.current !== null) {
-            toast.showSuccess(toastIdRef.current, {
-              successMessage,
-              txHash: data.txHash,
-              network,
-            });
-          }
-          mutationOptions?.onSuccess?.(data, vars, onMutateResult, context);
-        },
-        onError: (error, vars, onMutateResult, context) => {
-          if (!disableToast && toastIdRef.current !== null) {
-            toast.showError(toastIdRef.current, {
-              errorMessage: error instanceof Error ? error.message : errorMessage,
-            });
-          }
-          mutationOptions?.onError?.(error, vars, onMutateResult, context);
-        },
-      });
-    },
-    [mutation, toast, pendingMessage, successMessage, errorMessage, network, disableToast],
-  );
+  const mutate = (
+    variables: TVariables,
+    mutationOptions?: Parameters<typeof mutation.mutate>[1],
+  ) => {
+    if (!disableToast) {
+      toastIdRef.current = toast.showPending(pendingMessage);
+    }
 
-  const mutateAsync = useCallback(
-    async (variables: TVariables, mutationOptions?: Parameters<typeof mutation.mutateAsync>[1]) => {
-      if (!disableToast) {
-        toastIdRef.current = toast.showPending(pendingMessage);
-      }
-
-      try {
-        const data = await mutation.mutateAsync(variables, mutationOptions);
-
+    mutation.mutate(variables, {
+      ...mutationOptions,
+      onSuccess: (data, vars, onMutateResult, context) => {
         if (!disableToast && toastIdRef.current !== null) {
           toast.showSuccess(toastIdRef.current, {
             successMessage,
@@ -100,19 +98,51 @@ export function useContractMutation<TData extends { txHash?: string }, TError, T
             network,
           });
         }
-
-        return data;
-      } catch (error) {
+        triggerGamification();
+        mutationOptions?.onSuccess?.(data, vars, onMutateResult, context);
+      },
+      onError: (error, vars, onMutateResult, context) => {
         if (!disableToast && toastIdRef.current !== null) {
           toast.showError(toastIdRef.current, {
             errorMessage: error instanceof Error ? error.message : errorMessage,
           });
         }
-        throw error;
+        mutationOptions?.onError?.(error, vars, onMutateResult, context);
+      },
+    });
+  };
+
+  const mutateAsync = async (
+    variables: TVariables,
+    mutationOptions?: Parameters<typeof mutation.mutateAsync>[1],
+  ) => {
+    if (!disableToast) {
+      toastIdRef.current = toast.showPending(pendingMessage);
+    }
+
+    try {
+      const data = await mutation.mutateAsync(variables, mutationOptions);
+
+      if (!disableToast && toastIdRef.current !== null) {
+        toast.showSuccess(toastIdRef.current, {
+          successMessage,
+          txHash: data.txHash,
+          network,
+        });
       }
-    },
-    [mutation, toast, pendingMessage, successMessage, errorMessage, network, disableToast],
-  );
+
+      triggerGamification();
+
+      return data;
+    } catch (error) {
+      if (!disableToast && toastIdRef.current !== null) {
+        toast.showError(toastIdRef.current, {
+          errorMessage: error instanceof Error ? error.message : errorMessage,
+        });
+      }
+      throw error;
+    }
+  };
 
   return {
     ...mutation,

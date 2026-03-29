@@ -61,16 +61,18 @@ Rollback last batch (when needed):
 npm run migrate:down
 ```
 
+Scripts use `migrate:up` and `migrate:down` (colon-separated names), which work reliably across shells and CI.
+
 Core tables are created by these migrations (run in filename order):
 
-| Migration | Tables |
-|-----------|--------|
-| `1771691269865_initial-schema.js` | `scores`, `remittance_history` |
-| `1771691269866_loan-events-schema.js` | `loan_events`, `indexer_state` |
-| `1772000000000_webhook-subscriptions.js` | `webhook_subscriptions` |
-| `1773000000001_user-profiles.js` | `user_profiles` |
-| `1773000000002_loan-history.js` | `loan_history` |
-| `1773000000003_indexed-events.js` | `indexed_events` |
+| Migration                                | Tables                                     |
+| ---------------------------------------- | ------------------------------------------ |
+| `1771691269865_initial-schema.js`        | `scores`, `remittance_history`             |
+| `1771691269866_loan-events-schema.js`    | `loan_events`, `indexer_state`             |
+| `1772000000000_webhook-subscriptions.js` | `webhook_subscriptions`                    |
+| `1773000000001_user-profiles.js`         | `user_profiles`                            |
+| `1773000000002_loan-history.js`          | `loan_history`                             |
+| `1773000000003_indexed-events.js`        | `indexed_events`                           |
 | `1774000000004_scores-add-created-at.js` | adds `created_at` to `scores` (idempotent) |
 
 With Docker Compose from the repo root, the `backend` service runs `migrate:up` before `npm run dev` so the schema is applied automatically when the database is healthy.
@@ -100,6 +102,8 @@ npm run dev          # Start dev server with hot reload
 # Database
 npm run migrate:up   # Apply migrations (requires DATABASE_URL)
 npm run migrate:down # Roll back last migration batch
+npm run seed         # Seed realistic local development data
+npm run seed:reset   # Reset and reseed development data
 
 # Production
 npm run build        # Compile TypeScript to JavaScript
@@ -115,6 +119,30 @@ npm run lint         # Check code quality
 npm run lint:fix     # Fix linting issues
 npm run format       # Format code with Prettier
 npm run format:check # Check code formatting
+```
+
+### Development seed data
+
+New contributors can populate a realistic local dataset after running migrations:
+
+```bash
+npm run seed
+```
+
+This seeds:
+
+- `user_profiles` with sample borrowers and a lender
+- `scores` with varied borrower scores
+- `remittance_history` with completed, late, missed, and pending records
+- `loan_history` with pending, active, repaid, and defaulted loans
+- `loan_events` so borrower dashboards, loan details, pool stats, and SSE endpoints have data
+- `notifications` with both read and unread sample messages
+- `indexer_state` so interest calculations have a seeded latest ledger
+
+To wipe those local development rows and recreate them from scratch:
+
+```bash
+npm run seed:reset
 ```
 
 ## API Endpoints

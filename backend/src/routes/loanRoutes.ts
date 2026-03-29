@@ -1,12 +1,24 @@
 import { Router } from "express";
 import {
+  getLoanConfig,
   getBorrowerLoans,
   getLoanDetails,
+  requestLoan,
+  repayLoan,
+  submitTransaction,
 } from "../controllers/loanController.js";
-import { requireJwtAuth, requireWalletOwnership } from "../middleware/jwtAuth.js";
+import {
+  requireJwtAuth,
+  requireScopes,
+  requireWalletOwnership,
+} from "../middleware/jwtAuth.js";
 import { requireLoanBorrowerAccess } from "../middleware/loanAccess.js";
+import { validate } from "../middleware/validation.js";
+import { borrowerParamSchema } from "../schemas/stellarSchemas.js";
 
 const router = Router();
+
+router.get("/config", getLoanConfig);
 
 /**
  * @swagger
@@ -35,6 +47,10 @@ const router = Router();
  *     responses:
  *       200:
  *         description: Loans retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BorrowerLoansResponse'
  *       401:
  *         description: Missing or invalid Bearer token
  *       403:
@@ -43,7 +59,9 @@ const router = Router();
 router.get(
   "/borrower/:borrower",
   requireJwtAuth,
+  requireScopes("read:loans"),
   requireWalletOwnership,
+  validate(borrowerParamSchema),
   getBorrowerLoans,
 );
 
@@ -68,6 +86,10 @@ router.get(
  *     responses:
  *       200:
  *         description: Loan details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanDetailsResponse'
  *       401:
  *         description: Missing or invalid Bearer token
  *       404:
@@ -76,8 +98,194 @@ router.get(
 router.get(
   "/:loanId",
   requireJwtAuth,
+  requireScopes("read:loans"),
   requireLoanBorrowerAccess,
   getLoanDetails,
+);
+
+/**
+ * @swagger
+ * /loans/request:
+ *   post:
+ *     summary: Build an unsigned loan request transaction
+ *     description: >
+ *       Builds an unsigned Soroban `request_loan(borrower, amount)` transaction XDR.
+ *       The frontend signs it with the user's wallet and submits via POST /api/loans/submit.
+ *     tags: [Loans]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *               - borrowerPublicKey
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Loan amount requested
+ *                 example: 1000
+ *               borrowerPublicKey:
+ *                 type: string
+ *                 description: Borrower's Stellar public key (must match JWT)
+ *     responses:
+ *       200:
+ *         description: Unsigned transaction XDR returned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnsignedTransactionResponse'
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Missing or invalid Bearer token
+ */
+router.post("/request", requireJwtAuth, requestLoan);
+
+/**
+ * @swagger
+ * /loans/submit:
+ *   post:
+ *     summary: Submit a signed loan request transaction
+ *     description: >
+ *       Submits a signed transaction XDR to the Stellar network for a loan request.
+ *     tags: [Loans]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - signedTxXdr
+ *             properties:
+ *               signedTxXdr:
+ *                 type: string
+ *                 description: Signed transaction XDR
+ *     responses:
+ *       200:
+ *         description: Transaction submitted and result returned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SubmittedTransactionResponse'
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Missing or invalid Bearer token
+ */
+router.post("/submit", requireJwtAuth, submitTransaction);
+
+/**
+ * @swagger
+ * /loans/{loanId}/repay:
+ *   post:
+ *     summary: Build an unsigned repayment transaction
+ *     description: >
+ *       Builds an unsigned Soroban `repay(borrower, loan_id, amount)` transaction XDR.
+ *       The frontend signs it with the user's wallet and submits via
+ *       POST /api/loans/{loanId}/submit.
+ *     tags: [Loans]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: loanId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Loan ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *               - borrowerPublicKey
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Repayment amount
+ *                 example: 500
+ *               borrowerPublicKey:
+ *                 type: string
+ *                 description: Borrower's Stellar public key (must match JWT)
+ *     responses:
+ *       200:
+ *         description: Unsigned repayment transaction XDR returned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RepayTransactionResponse'
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Missing or invalid Bearer token
+ *       404:
+ *         description: Loan not found or not accessible
+ */
+router.post(
+  "/:loanId/repay",
+  requireJwtAuth,
+  requireLoanBorrowerAccess,
+  repayLoan,
+);
+
+/**
+ * @swagger
+ * /loans/{loanId}/submit:
+ *   post:
+ *     summary: Submit a signed repayment transaction
+ *     description: >
+ *       Submits a signed transaction XDR to the Stellar network for a loan repayment.
+ *     tags: [Loans]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: loanId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Loan ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - signedTxXdr
+ *             properties:
+ *               signedTxXdr:
+ *                 type: string
+ *                 description: Signed transaction XDR
+ *     responses:
+ *       200:
+ *         description: Transaction submitted and result returned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SubmittedTransactionResponse'
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Missing or invalid Bearer token
+ *       404:
+ *         description: Loan not found or not accessible
+ */
+router.post(
+  "/:loanId/submit",
+  requireJwtAuth,
+  requireLoanBorrowerAccess,
+  submitTransaction,
 );
 
 export default router;
